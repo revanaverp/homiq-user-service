@@ -1,0 +1,97 @@
+﻿services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: homiq-app
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - .:/var/www
+      - ./docker/php/local.ini:/usr/local/etc/php/conf.d/local.ini
+    networks:
+      - homiq-network
+    depends_on:
+      - mysql
+      - rabbitmq
+
+  nginx:
+    image: nginx:alpine
+    container_name: homiq-nginx
+    restart: unless-stopped
+    ports:
+      - "8000:80"
+    volumes:
+      - .:/var/www
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+    networks:
+      - homiq-network
+    depends_on:
+      - app
+
+  mysql:
+    image: mysql:8.0
+    container_name: homiq-mysql
+    restart: unless-stopped
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_DATABASE: homiq_user
+      MYSQL_ROOT_PASSWORD: secret
+      MYSQL_PASSWORD: secret
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - homiq-network
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: homiq-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5673:5672"
+      - "15673:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - homiq-network
+
+  postgres:
+    image: postgres:15
+    container_name: homiq-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: postgrespassword
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - homiq-network
+
+  hasura:
+    image: hasura/graphql-engine:v2.38.0
+    container_name: homiq-hasura
+    restart: unless-stopped
+    ports:
+      - "8090:8080"
+    environment:
+      HASURA_GRAPHQL_METADATA_DATABASE_URL: postgres://postgres:postgrespassword@postgres:5432/postgres
+      HASURA_GRAPHQL_ENABLE_CONSOLE: "true"
+      HASURA_GRAPHQL_DEV_MODE: "true"
+      HASURA_GRAPHQL_ADMIN_SECRET: myadminsecret
+    depends_on:
+      - postgres
+      - mysql
+    networks:
+      - homiq-network
+
+networks:
+  homiq-network:
+    driver: bridge
+
+volumes:
+  mysql-data:
+  rabbitmq-data:
+  postgres-data:
